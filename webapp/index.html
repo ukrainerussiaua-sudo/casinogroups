@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Игровой стол</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#0b1f18;--felt:#14402f;--felt2:#1d6048;--ivory:#f6f0e0;--ink:#1c1a17;--red:#c43a2f;--brass:#e2bb68;--brass2:#b8903f;--muted:#8db3a3;--line:rgba(246,240,224,.13);--serif:Palatino,"Palatino Linotype","Iowan Old Style",Georgia,serif}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--ivory);overscroll-behavior:none}
+body{font:15px/1.35 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh;background:radial-gradient(120% 70% at 50% -10%,#18493a,var(--bg) 65%);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);overflow-x:hidden}
+button{font:inherit;color:inherit;border:0;cursor:pointer}
+.top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
+.brand{display:flex;align-items:center;gap:10px}.brand h1{font:700 20px var(--serif)}
+.glyph{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(#f0cd82,#b8903f);color:#2a1d07;font-size:17px}
+.chip{display:inline-block;padding:3px 10px;border-radius:99px;background:rgba(246,240,224,.1);border:1px solid var(--line);font-size:12px;margin-left:6px}
+.chip.on{background:var(--brass);color:var(--ink);border-color:var(--brass);font-weight:700}
+main{padding:4px 12px 32px;max-width:520px;margin:0 auto}
+.stack>*+*{margin-top:12px}
+.row{display:flex;align-items:center}.between{justify-content:space-between}.gap{gap:10px}
+.dim{color:var(--muted);font-size:13px}.say{text-align:center}
+.status{text-align:center;font:600 15px var(--serif);min-height:22px}
+.banner{background:linear-gradient(#f0cd82,#cfa24d);color:#2a1d07;padding:11px 12px;border-radius:12px;font-weight:700;text-align:center}
+.tag{font-size:12px;color:var(--brass)}
+/* ── cards ── */
+.c{--cw:56px;width:var(--cw);height:calc(var(--cw)*1.42);border-radius:calc(var(--cw)*.13);background:linear-gradient(160deg,#fffaf0,#ece2c8);color:var(--ink);position:relative;flex:none;font-family:var(--serif);font-weight:700;box-shadow:0 1px 1px rgba(0,0,0,.55),0 6px 14px rgba(0,0,0,.38);transform:rotate(var(--r,0deg)) translateY(var(--y,0px));transform-origin:50% 130%;user-select:none}
+.c.sm{--cw:40px}.c.xs{--cw:26px}.c.md{--cw:48px}
+.c .tl,.c .br{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:.95;font-size:calc(var(--cw)*.3)}
+.c .tl{left:calc(var(--cw)*.09);top:calc(var(--cw)*.06)}.c .br{right:calc(var(--cw)*.09);bottom:calc(var(--cw)*.06);transform:rotate(180deg)}
+.c i{font-style:normal}.c .mid{position:absolute;inset:0;display:grid;place-items:center;font-size:calc(var(--cw)*.56);opacity:.9}
+.c.r{color:var(--red)}
+.c.back{background:repeating-linear-gradient(45deg,#2b6b53 0 3px,#1f5440 3px 6px);box-shadow:inset 0 0 0 calc(var(--cw)*.05) var(--ivory),inset 0 0 0 calc(var(--cw)*.09) #1f5440,0 1px 1px rgba(0,0,0,.55),0 6px 14px rgba(0,0,0,.38)}
+.c.ok{box-shadow:0 0 0 2px var(--brass),0 8px 20px rgba(226,187,104,.4);cursor:pointer}
+.c.no{filter:brightness(.72) saturate(.7)}
+.c.ok:active{transform:rotate(var(--r,0deg)) translateY(calc(var(--y,0px) - 14px))}
+.fan{display:flex;justify-content:center;padding:6px 0 4px}.fan .c+.c{margin-left:calc(var(--ov,0px)*-1)}
+.fan.big{padding-top:26px}
+.pile{position:relative;width:62px;height:72px}.pile .c{position:absolute;left:0;top:0}
+.pile .trump{left:10px;top:12px}.pile small{position:absolute;left:0;right:0;bottom:-16px;text-align:center;font-size:11px;color:var(--muted)}
+/* ── surfaces ── */
+.table{background:radial-gradient(ellipse at 50% 35%,var(--felt2),var(--felt) 72%);border:1px solid rgba(226,187,104,.28);border-radius:22px;padding:14px;box-shadow:inset 0 8px 30px rgba(0,0,0,.35),0 8px 24px rgba(0,0,0,.3)}
+.dtable{display:grid;grid-template-columns:70px 1fr;gap:10px;min-height:196px}
+.piles{display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:4px 0 22px;gap:30px}
+.board{display:flex;flex-wrap:wrap;gap:10px 6px;justify-content:center;align-content:center}
+.pair{position:relative;width:calc(56px + 22px);height:calc(56px*1.42 + 14px);margin:2px;transform:rotate(var(--pr,0deg))}
+.pair .c:first-child{position:absolute;left:0;bottom:0}.pair .c+.c{position:absolute;left:20px;top:0;box-shadow:-3px 4px 10px rgba(0,0,0,.45)}
+.oval{background:radial-gradient(ellipse at 50% 35%,var(--felt2),var(--felt) 72%);border:7px solid #2d1f13;outline:2px solid var(--brass2);border-radius:90px;padding:18px 14px;display:grid;gap:12px;justify-items:center;box-shadow:inset 0 8px 30px rgba(0,0,0,.45),0 10px 24px rgba(0,0,0,.35);position:relative}
+.bd{display:flex;gap:6px}.c.empty{background:transparent;border:1px dashed rgba(246,240,224,.25);box-shadow:none}
+.pot{display:inline-flex;align-items:center;gap:8px;padding:5px 14px;border-radius:99px;background:rgba(0,0,0,.35);font:700 15px var(--serif)}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#f6dfa6,#b8903f);box-shadow:inset 0 0 0 3px rgba(255,255,255,.35)}
+.oval .pile{position:absolute;right:20px;bottom:12px;transform:scale(.55);transform-origin:right bottom}.oval .pile small{display:none}
+.dealer{display:grid;justify-items:center;gap:4px}
+/* ── seats ── */
+.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:700 15px var(--serif);background:var(--ac,#35705a);color:#fff;border:2px solid rgba(255,255,255,.28);flex:none}
+.opps{display:flex;gap:8px;overflow-x:auto;padding:2px}
+.opp{flex:1;min-width:112px;position:relative;background:rgba(0,0,0,.24);border:1px solid var(--line);border-radius:16px;padding:8px;display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:center}
+.opp .mini{grid-column:1/-1;display:flex;justify-content:center;min-height:52px;padding-top:6px}
+.opp .cnt{position:absolute;right:8px;top:6px;font-size:12px;color:var(--muted)}
+.opp.att,.seat.turn{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass),0 0 18px rgba(226,187,104,.25)}
+.opp.def{border-color:#6fb4d8}.opp.out,.seat.out{opacity:.45}
+.seat{background:rgba(0,0,0,.24);border:1px solid var(--line);border-radius:16px;padding:9px 10px;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
+.seat .cards{grid-column:1/-1;display:flex;justify-content:flex-start;min-height:44px}
+.seat b{font-weight:650}
+.badge{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 7px;border-radius:99px;background:rgba(0,0,0,.4);font:700 13px var(--serif)}
+.badge.g{background:var(--brass);color:var(--ink)}.badge.bad{background:#7d2620}.badge.win{background:#2f7d4f}
+.betchip{display:inline-flex;align-items:center;gap:5px;font:700 13px var(--serif);color:var(--brass)}.betchip .coin{width:14px;height:14px}
+/* ── controls ── */
+.btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.btn{padding:12px 22px;border-radius:99px;background:rgba(246,240,224,.1);border:1px solid var(--line);font-weight:650;min-width:92px;transition:transform .1s}
+.btn.main{background:linear-gradient(#f0cd82,#cfa24d);color:#2a1d07;border-color:#f6dfa6}
+.btn.warn{background:linear-gradient(#a8392f,#7d2620);border-color:#c8574d}.btn:active{transform:scale(.95)}
+.panel{background:rgba(0,0,0,.24);border:1px solid var(--line);border-radius:16px;padding:12px}
+input[type=range]{width:100%;accent-color:var(--brass)}
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:rgba(0,0,0,.85);border:1px solid var(--line);padding:9px 15px;border-radius:12px;z-index:90;max-width:90%}
+.msg{text-align:center;padding:70px 20px;color:var(--muted)}
+/* ── tetris ── */
+.tt{display:flex;gap:12px;justify-content:center;align-items:flex-start}
+canvas{background:#08150f;border:2px solid #2d1f13;outline:1px solid var(--brass2);border-radius:8px;display:block}
+.opps2{display:flex;flex-direction:column;gap:10px;align-items:center}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;justify-items:center}
+.pad{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px;touch-action:none}
+.pad button{height:54px;border-radius:16px;background:rgba(246,240,224,.1);border:1px solid var(--line);font-size:20px;user-select:none;touch-action:none}
+/* ── профиль ── */
+.pbtn{cursor:pointer;font-weight:700;color:var(--brass)}
+.sheet{position:fixed;inset:0;z-index:80;overflow-y:auto;background:radial-gradient(120% 70% at 50% -10%,#18493a,var(--bg) 65%);padding:env(safe-area-inset-top) 0 calc(24px + env(safe-area-inset-bottom))}
+.sheet .head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;position:sticky;top:0;background:rgba(11,31,24,.92);z-index:2}
+.sheet h2{font:700 20px var(--serif)}
+.sheet .btn{min-width:0;padding:7px 14px}
+.hero{display:grid;justify-items:center;gap:6px;padding:18px 14px 16px;border-radius:22px;background:radial-gradient(ellipse at 50% 0%,var(--felt2),var(--felt) 75%);border:1px solid rgba(226,187,104,.28);box-shadow:inset 0 8px 30px rgba(0,0,0,.35)}
+.av.big{width:64px;height:64px;font-size:28px;border-width:3px}
+.hname{font:700 20px var(--serif)}
+.rankpill{padding:4px 14px;border-radius:99px;background:linear-gradient(#f0cd82,#cfa24d);color:#2a1d07;font-weight:700}
+.pts b{font:700 38px var(--serif);color:var(--brass)}
+.bar{width:100%;height:10px;border-radius:99px;background:rgba(0,0,0,.4);overflow:hidden}.bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#f0cd82,#b8903f)}
+.stats4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.st{background:rgba(0,0,0,.24);border:1px solid var(--line);border-radius:14px;padding:10px 2px;text-align:center}.st b{display:block;font:700 22px var(--serif)}.st span{font-size:11px;color:var(--muted)}
+.grow{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}.grow .bar{grid-column:1/-1;height:6px}
+.dots{display:flex;gap:6px;justify-content:center;font-size:16px}
+.badges{display:flex;flex-wrap:wrap;gap:6px}.badges .chip{margin:0;font-size:13px}
+.ladder{display:flex;flex-wrap:wrap;gap:6px}.ladder .chip{margin:0;opacity:.55}.ladder .chip.cur{opacity:1;background:var(--brass);color:var(--ink);border-color:var(--brass);font-weight:700}
+.lb{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:7px 8px;border-radius:12px}.lb.me{background:rgba(226,187,104,.16);outline:1px solid var(--brass)}
+.lb .pos{text-align:center;font:700 15px var(--serif)}
+.h3{font:700 16px var(--serif);margin:2px 2px -4px}
+b.up{color:#7be0a0}b.dn{color:#ff8d84}
+.rules{font-size:12.5px;color:var(--muted);display:grid;gap:4px}
+/* ── demo bar ── */
+.demo{display:none;gap:6px;flex-wrap:wrap;justify-content:center;padding:8px 12px;border-bottom:1px solid var(--line);background:rgba(0,0,0,.25)}
+.demo button{padding:7px 13px;border-radius:99px;background:rgba(246,240,224,.1);font-size:14px}.demo button.on{background:var(--brass);color:var(--ink);font-weight:700}
+.note{display:none;font-size:12px;color:var(--muted);text-align:center;padding:8px 16px 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="top"><div class="brand"><div class="glyph" id="glyph">♠</div><h1 id="title">Игровой стол</h1></div><div id="meta"></div></div>
+<div class="demo" id="demo"></div><div class="note" id="note">Демо: так выглядит Mini App внутри Telegram. Боты ходят сами, в дураке можно реально играть.</div>
+<main id="main"><div class="msg">Подключаюсь…</div></main>
+<script>
+"use strict";
+const tg = window.Telegram?.WebApp;
+try { tg.ready(); tg.expand(); tg.setHeaderColor('#0b1f18'); tg.setBackgroundColor('#0b1f18'); tg.disableVerticalSwipes?.(); } catch (e) {}
+const qs = new URLSearchParams(location.search);
+const LOBBY = tg?.initDataUnsafe?.start_param || qs.get('lobby');
+const DEV = qs.get('dev') === '1';
+const DEMO = !tg?.initData && !DEV;
+const PONLY = !LOBBY && !DEMO;  // открыто без игры (кнопка «Открыть профиль» из чата)
+const SUIT = {S:'♠',H:'♥',D:'♦',C:'♣'};
+const TITLES = {durak:'Дурак', blackjack:'Блэкджек', poker:'Покер', tetris:'Тетрис'};
+const GLYPH = {durak:'♠', blackjack:'♣', poker:'♦', tetris:'▦'};
+const $ = s => document.querySelector(s);
+let ws, S = null, prevS = null, retry = 0, fatalShown = false;
+const UI = {raise: null};
+
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat(3)) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+}
+const nm = id => (S.names[id] || '?');
+const send = o => ws && ws.readyState === 1 && ws.send(JSON.stringify(o));
+const act = o => { try { tg.HapticFeedback?.impactOccurred('light'); } catch (e) {} if (DEMO) return demoAct(o); send({t: 'act', ...o}); };
+function toast(t) { const e = h('div', {class: 'toast'}, t); document.body.append(e); setTimeout(() => e.remove(), 2200); }
+
+// ───────── cards ─────────
+function card(c, o = {}) {
+  const s = c ? c.slice(-1) : '', r = c ? c.slice(0, -1) : '';
+  const e = h('div', {class: `c ${c ? (s === 'H' || s === 'D' ? 'r' : '') : 'back'} ${o.cls || ''}`, onclick: o.onclick});
+  if (c) { const g = SUIT[s]; e.append(h('b', {class: 'tl'}, h('span', {}, r), h('i', {}, g)), h('i', {class: 'mid'}, g), h('b', {class: 'br'}, h('span', {}, r), h('i', {}, g))); }
+  if (o.k) { e.dataset.k = o.k; e.dataset.f = c || 'back'; }
+  if (o.src) e.dataset.src = o.src;
+  if (o.r != null) e.style.setProperty('--r', o.r + 'deg');
+  if (o.y != null) e.style.setProperty('--y', o.y + 'px');
+  return e;
+}
+// веер: карты перекрывают друг друга и чуть повёрнуты по дуге
+function fan(cards, mk, cw = 56, avail = Math.min(innerWidth, 520) - 44, cls = '') {
+  const n = cards.length, mid = (n - 1) / 2, step = Math.min(5, 24 / Math.max(n, 1));
+  const ov = n > 1 ? Math.max(cw * .3, (n * cw - avail) / (n - 1)) : 0;
+  const box = h('div', {class: 'fan ' + cls, style: `--ov:${ov}px`});
+  cards.forEach((c, i) => { const d = i - mid; box.append(mk(c, i, {r: +(d * step).toFixed(1), y: +(d * d * (step > 3 ? 1.5 : 1)).toFixed(1)})); });
+  return box;
+}
+const avatar = id => h('div', {class: 'av', style: `--ac:hsl(${(id * 67) % 360} 42% 36%)`}, (nm(id) || '?')[0].toUpperCase());
+
+// ───────── FLIP-анимации: карты летят между рендерами ─────────
+const REDUCED = matchMedia('(prefers-reduced-motion:reduce)').matches;
+function snap() { const m = new Map(); document.querySelectorAll('[data-k]').forEach(e => m.set(e.dataset.k, {r: e.getBoundingClientRect(), n: e.cloneNode(true), f: e.dataset.f})); return m; }
+function fx(before, dest) {
+  if (REDUCED) return;
+  const A = id => document.querySelector(`[data-a="${id}"]`);
+  let i = 0, j = 0;
+  document.querySelectorAll('[data-k]').forEach(el => {
+    const o = before.get(el.dataset.k); let from = o && o.r;
+    if (!o && el.dataset.src) { const a = A(el.dataset.src); if (a) from = a.getBoundingClientRect(); }
+    if (!from) return;
+    const to = el.getBoundingClientRect(), end = getComputedStyle(el).transform, e0 = end === 'none' ? '' : end;
+    if (o && o.f !== el.dataset.f) { el.animate([{transform: e0 + ' scaleX(.05)'}, {transform: e0 || 'none'}], {duration: 320, easing: 'ease-out'}); return; }
+    const dx = from.left - to.left + (o ? 0 : (from.width - to.width) / 2), dy = from.top - to.top + (o ? 0 : (from.height - to.height) / 2);
+    if (Math.abs(dx) + Math.abs(dy) < 3) return;
+    el.animate([{transform: `translate(${dx}px,${dy}px) ${o ? '' : 'scale(.6)'} ${e0}`, opacity: o ? 1 : .2}, {transform: e0 || 'none', opacity: 1}],
+      {duration: 420, delay: i++ * 55, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards'});
+  });
+  before.forEach((o, k) => {
+    if (document.querySelector(`[data-k="${CSS.escape(k)}"]`)) return;
+    const a = dest && A(dest); if (!a) return;
+    const g = o.n; g.style.cssText = `position:fixed;left:${o.r.left}px;top:${o.r.top}px;margin:0;z-index:60;pointer-events:none`;
+    document.body.append(g);
+    const t = a.getBoundingClientRect(), st = getComputedStyle(g).transform;
+    const dx = t.left + t.width / 2 - (o.r.left + o.r.width / 2), dy = t.top + t.height / 2 - (o.r.top + o.r.height / 2);
+    g.animate([{transform: st, opacity: 1}, {transform: `translate(${dx}px,${dy}px) rotate(${20 + j * 7}deg) scale(.55)`, opacity: .1}],
+      {duration: 520, delay: j++ * 60, easing: 'cubic-bezier(.55,0,.85,.4)', fill: 'forwards'}).onfinish = () => g.remove();
+  });
+}
+function destFor(p, s) {
+  if (s.game === 'durak' && p.view && s.view) return s.view.discard > p.view.discard ? 'discard' : 'seat-' + p.view.defender;
+  return 'deck';
+}
+
+// ───────── Профиль ─────────
+let PD = null, SHEET = false;
+function renderMeta() {
+  const k = [];
+  if (S) k.push(h('span', {class: 'chip on'}, S.role === 'player' ? 'Игрок' : 'Зритель'), h('span', {class: 'chip'}, '👁 ' + S.viewers));
+  if (PD && !PONLY) k.push(h('button', {class: 'chip pbtn', onclick: openSheet}, `${PD.p.rank.emoji} ${PD.p.points} ⭐`));
+  $('#meta').replaceChildren(...k);
+}
+function openSheet() { SHEET = true; if (DEMO) PD = demoProfileMsg(); else send({t: 'profile'}); drawSheet(); }
+function drawSheet() {
+  let el = $('#sheet');
+  if (!SHEET) { el && el.remove(); return; }
+  if (!el) { el = h('div', {class: 'sheet', id: 'sheet'}); document.body.append(el); }
+  el.replaceChildren(h('div', {class: 'head'}, h('h2', {}, '👤 Профиль'), h('button', {class: 'btn', onclick: () => { SHEET = false; drawSheet(); }}, '✕')),
+    h('main', {}, PD ? profileNode(PD) : h('div', {class: 'msg'}, 'Загружаю…')));
+}
+function renderProfileOnly() { $('#title').textContent = 'Профиль'; $('#glyph').textContent = '👤'; $('#main').replaceChildren(profileNode(PD)); }
+function rewardsPanel(R) {
+  return h('div', {class: 'panel stack'}, h('div', {class: 'tag say'}, '⭐ Очки за партию'), Object.entries(R).map(([id, r]) =>
+    h('div', {class: 'row between'}, h('span', {}, (r.result === 'w' ? '🏆 ' : r.result === 'l' ? '💀 ' : '🤝 ') + nm(+id) + (+id === S.me ? ' · ты' : '')),
+      h('span', {}, h('b', {class: r.delta > 0 ? 'up' : r.delta < 0 ? 'dn' : ''}, (r.delta > 0 ? '+' : '') + r.delta), ` → ${r.points} ${r.rank.emoji}`, r.up ? ' 🎉 новое звание!' : ''))));
+}
+function profileNode(D) {
+  const p = D.p, r = p.rank, G = D.games || {}, box = h('div', {class: 'stack'});
+  box.append(h('div', {class: 'hero'},
+    h('div', {class: 'av big', style: `--ac:hsl(${(p.uid * 67) % 360} 42% 36%)`}, (p.name || '?')[0].toUpperCase()),
+    h('div', {class: 'hname'}, p.name), h('div', {class: 'rankpill'}, `${r.emoji} ${r.name}`),
+    h('div', {class: 'pts'}, h('b', {}, p.points), ' ⭐'),
+    h('div', {class: 'bar'}, h('i', {style: `width:${Math.round(r.progress * 100)}%`})),
+    h('div', {class: 'dim'}, r.next_min != null ? `до «${r.next_name}» ${r.next_emoji}: ещё ${r.left} очков` : 'Высшее звание достигнуто'),
+    p.place ? h('div', {class: 'tag'}, `#${p.place} в рейтинге из ${p.total}`) : h('div', {class: 'tag'}, 'Сыграй партию, чтобы попасть в рейтинг')));
+  box.append(h('div', {class: 'stats4'}, [['Сыграно', p.played], ['Побед', p.wins], ['Поражений', p.losses], ['Ничьих', p.draws]].map(([t, v]) => h('div', {class: 'st'}, h('b', {}, v), h('span', {}, t)))));
+  box.append(h('div', {class: 'row between panel'}, h('span', {}, `📊 Винрейт ${p.winrate}%`), h('span', {}, `🔥 Серия ${p.streak} · рекорд ${p.best_streak}`)));
+  const gs = Object.entries(p.games || {}).filter(([, s]) => s.played);
+  if (gs.length) box.append(h('div', {class: 'h3'}, 'По играм'), h('div', {class: 'panel stack'}, gs.map(([g, s]) => h('div', {class: 'grow'},
+    h('span', {}, `${(G[g] || {}).emoji || ''} ${(G[g] || {}).title || g}`), h('span', {class: 'dim'}, `${s.played} игр · ${s.wins} поб / ${s.losses} пор / ${s.draws} нич`),
+    h('div', {class: 'bar'}, h('i', {style: `width:${Math.round(100 * s.wins / s.played)}%`}))))));
+  if (p.recent && p.recent.length) box.append(h('div', {class: 'h3'}, 'Последние партии'), h('div', {class: 'panel dots'}, p.recent.map(x => ({w: '🟢', l: '🔴', d: '🟡'}[x]))));
+  if (p.badges && p.badges.length) box.append(h('div', {class: 'h3'}, 'Значки'), h('div', {class: 'badges'}, p.badges.map(b => h('span', {class: 'chip'}, `${b.e} ${b.t}`))));
+  box.append(h('div', {class: 'h3'}, D.scope === 'chat' ? 'Топ этого чата' : 'Топ игроков'),
+    h('div', {class: 'panel'}, (D.top || []).length ? D.top.map((t, i) => h('div', {class: 'lb' + (t.uid === p.uid ? ' me' : '')},
+      h('span', {class: 'pos'}, ['🥇', '🥈', '🥉'][i] || i + 1), h('span', {}, `${t.rank_emoji} ${t.name || '?'}`), h('b', {}, `${t.points} ⭐`))) : h('div', {class: 'dim say'}, 'Пока никто не играл')));
+  box.append(h('div', {class: 'h3'}, 'Звания'), h('div', {class: 'ladder'}, (D.ranks || []).map(x => h('span', {class: 'chip' + (x.name === r.name ? ' cur' : '')}, `${x.emoji} ${x.name} · ${x.min}`))));
+  box.append(h('div', {class: 'panel rules'}, (D.rules || []).map(t => h('div', {}, t))));
+  return box;
+}
+
+// ───────── connection ─────────
+function connect() {
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.onopen = () => { retry = 0; send({t: 'auth', initData: tg?.initData || '', lobby: LOBBY || 'me', dev: DEV}); };
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.t === 'state') { S = d; render(); }
+    else if (d.t === 'profile') { PD = d; renderMeta(); if (PONLY) renderProfileOnly(); else drawSheet(); }
+    else if (d.t === 'error') toast(d.msg);
+    else if (d.t === 'garbage') { if (TT.g) TT.g.garb += d.n; }
+    else if (d.t === 'fatal') { fatalShown = true; $('#main').replaceChildren(h('div', {class: 'msg'}, d.msg)); }
+  };
+  ws.onclose = () => { if (!fatalShown) setTimeout(connect, Math.min(5000, 400 * ++retry)); };
+}
+
+// ───────── render ─────────
+function render() {
+  const v = S.view, main = $('#main');
+  $('#title').textContent = TITLES[S.game] || 'Игра'; $('#glyph').textContent = GLYPH[S.game] || '♠';
+  renderMeta();
+  if (S.game === 'tetris') return tetris(S, v, main);
+  TT.mounted = false;
+  const before = snap();
+  const out = h('div', {class: 'stack'});
+  if (S.role === 'spectator') out.append(h('div', {class: 'dim say'}, 'Ты смотришь бой. Карты в руках скрыты.'));
+  if (S.status === 'finished') out.append(h('div', {class: 'banner'}, '🏆 ' + S.result));
+  if (S.status === 'finished' && S.rewards && Object.keys(S.rewards).length) out.append(rewardsPanel(S.rewards));
+  out.append({durak, blackjack, poker}[S.game](S, v));
+  main.replaceChildren(out);
+  fx(before, prevS && prevS.game === S.game ? destFor(prevS, S) : 'deck');
+  prevS = S;
+}
+const btn = (label, fn, cls = '') => h('button', {class: 'btn ' + cls, onclick: fn}, label);
+
+// ───────── Дурак ─────────
+const RK = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'], rk = c => c.slice(0, -1), su = c => c.slice(-1), rv = c => RK.indexOf(rk(c));
+function okDurak(c, v, me) {
+  if (v.finished || !v.active.includes(me)) return false;
+  if (me === v.defender) return v.phase === 'attack' && v.table.some(([a, d]) => !d && (su(c) === su(a) ? rv(c) > rv(a) : su(c) === su(v.trump)));
+  if (!v.table.length) return me === v.attacker;
+  return v.table.length < 6 && v.table.flat().some(x => x && rk(x) === rk(c));
+}
+function durak(S, v) {
+  const me = S.me, P = S.role === 'player', T = v.table, allDef = T.length && T.every(p => p[1]);
+  const role = p => p === v.attacker ? '⚔ атакует' : p === v.defender ? '🛡 отбивается' : v.active.includes(p) ? 'ждёт' : 'вышел';
+  const box = h('div', {class: 'stack'});
+  box.append(h('div', {class: 'opps'}, v.order.filter(p => p !== me).map(p =>
+    h('div', {class: `opp ${v.active.includes(p) ? '' : 'out'} ${p === v.attacker ? 'att' : p === v.defender ? 'def' : ''}`, 'data-a': 'seat-' + p},
+      avatar(p), h('div', {}, h('b', {}, nm(p)), h('div', {class: 'tag'}, role(p))),
+      h('span', {class: 'cnt'}, v.counts[p]),
+      h('div', {class: 'mini'}, fan(Array(Math.min(v.counts[p], 8)).fill(null), (c, i, st) => card(null, {cls: 'xs', ...st}), 26, 100))))));
+  const deck = h('div', {class: 'pile', 'data-a': 'deck'}, card(v.trump, {cls: 'sm trump', r: 90}), v.deck > 1 ? card(null, {cls: 'sm'}) : null, h('small', {}, v.deck > 0 ? v.deck : 'козырь'));
+  const disc = h('div', {class: 'pile', 'data-a': 'discard'}, v.discard ? [card(null, {cls: 'sm', r: -8}), card(null, {cls: 'sm', r: 5})] : h('div', {class: 'c sm empty'}), h('small', {}, 'бито ' + v.discard));
+  box.append(h('div', {class: 'table dtable'}, h('div', {class: 'piles'}, deck, disc),
+    h('div', {class: 'board'}, T.length ? T.map(([a, d], i) => h('div', {class: 'pair', style: `--pr:${[-4, 3, -2, 5, -5, 2][i % 6]}deg`},
+      card(a, {k: a, src: 'seat-' + v.attacker, r: -3}), d ? card(d, {k: d, src: 'seat-' + v.defender, r: 13}) : null)) : h('div', {class: 'dim'}, 'Стол пуст'))));
+  if (!v.finished) box.append(h('div', {class: 'status'}, !v.active.includes(me) && P ? '' :
+    v.phase === 'taking' ? (me === v.defender ? 'Ты берёшь карты' : `${nm(v.defender)} берёт — можно подкинуть`) :
+    me === v.defender ? 'Отбивайся или возьми' : me === v.attacker ? (T.length ? (allDef ? 'Всё отбито — «Бито» или подкинь' : 'Жди ответа защитника') : 'Твоя атака — выбери карту') : `${nm(v.attacker)} → ${nm(v.defender)}`));
+  if (P && v.hand) {
+    const ord = {S: 0, H: 1, D: 2, C: 3};
+    const hand = [...v.hand].sort((a, b) => (su(a) === su(v.trump)) - (su(b) === su(v.trump)) || ord[su(a)] - ord[su(b)] || rv(a) - rv(b));
+    if (hand.length) box.append(fan(hand, (c, i, st) => { const ok = okDurak(c, v, me); return card(c, {k: c, src: 'deck', cls: ok ? 'ok' : 'no', onclick: () => act({a: 'play', card: c}), ...st}); }, 60, undefined, 'big'));
+    else if (!v.finished) box.append(h('div', {class: 'banner'}, 'Ты вышел из игры 🎉'));
+    const b = h('div', {class: 'btns'});
+    if (!v.finished) {
+      if (me === v.defender && v.phase === 'attack' && T.length) b.append(btn('Беру', () => act({a: 'take'}), 'warn'));
+      if (me === v.attacker && v.phase === 'taking') b.append(btn('Готово', () => act({a: 'done'}), 'main'));
+      if (me === v.attacker && v.phase === 'attack' && allDef) b.append(btn('Бито', () => act({a: 'done'}), 'main'));
+    }
+    box.append(b);
+  }
+  return box;
+}
+
+// ───────── Блэкджек ─────────
+function blackjack(S, v) {
+  const me = S.me, box = h('div', {class: 'stack'});
+  const dc = [...v.dealer.map((c, i) => [c, i]), ...Array(v.dealer_hidden).fill(0).map((_, j) => [null, v.dealer.length + j])];
+  box.append(h('div', {class: 'row between dim'}, h('span', {}, `Раунд ${v.round} из ${v.rounds}`), h('span', {class: 'chip'}, 'ставка 100')));
+  box.append(h('div', {class: 'table dealer'}, h('div', {class: 'pile', 'data-a': 'deck', style: 'position:absolute;right:26px;transform:scale(.7)'}, card(null, {cls: 'sm'})),
+    h('div', {class: 'tag'}, 'Дилер' + (v.dealer_total != null ? ` · ${v.dealer_total}` : '')),
+    fan(dc, (x, i, st) => card(x[0], {k: 'd' + x[1], src: 'deck', ...st}), 56, 200)));
+  box.querySelector('.dealer').style.position = 'relative';
+  for (const p of S.players) {
+    const hd = v.hands[p], inR = !!hd;
+    const st = !inR ? 'без фишек' : hd.delta != null ? (hd.delta > 0 ? `+${hd.delta}` : hd.delta === 0 ? 'ничья' : `${hd.delta}`) : v.turn === p ? 'думает…' : hd.done ? (hd.total > 21 ? 'перебор' : 'стоит') : 'ждёт';
+    box.append(h('div', {class: `seat ${v.turn === p ? 'turn' : ''} ${inR ? '' : 'out'}`},
+      avatar(p), h('div', {}, h('b', {}, nm(p) + (p === me ? ' · ты' : '')), h('div', {class: 'tag'}, st)),
+      h('span', {class: 'betchip'}, h('span', {class: 'coin'}), v.chips[p]),
+      inR ? h('div', {class: 'cards'}, fan(hd.cards || Array(hd.n).fill(null), (c, i, s2) => card(c, {k: `p${p}-${i}`, src: 'deck', cls: 'md', ...s2}), 48, 190), hd.total != null ? h('span', {class: `badge ${hd.total === 21 ? 'g' : hd.total > 21 ? 'bad' : ''}`, style: 'align-self:center;margin-left:10px'}, hd.total) : null) : null));
+  }
+  if (S.role === 'player' && !v.finished) {
+    const b = h('div', {class: 'btns'});
+    if (v.phase === 'play' && v.turn === me) {
+      b.append(btn('Ещё', () => act({a: 'hit'}), 'main'), btn('Хватит', () => act({a: 'stand'})));
+      if (v.hands[me].n === 2) b.append(btn('Удвоить', () => act({a: 'double'})));
+    } else if (v.phase === 'result') b.append(btn('Следующий раунд', () => act({a: 'next'}), 'main'));
+    box.append(b);
+  }
+  if (v.finished) box.append(h('div', {class: 'dim say'}, 'Итоговые фишки: ' + S.players.map(p => `${nm(p)} ${v.chips[p]}`).join(' · ')));
+  return box;
+}
+
+// ───────── Покер ─────────
+function poker(S, v) {
+  const me = S.me, box = h('div', {class: 'stack'});
+  box.append(h('div', {class: 'row between dim'}, h('span', {}, `Раздача ${v.hand_no} · блайнды ${v.blinds[0]}/${v.blinds[1]}`), h('span', {class: 'chip'}, {preflop: 'префлоп', flop: 'флоп', turn: 'тёрн', river: 'ривер'}[v.street] || v.street)));
+  box.append(h('div', {class: 'oval'}, h('div', {class: 'pile', 'data-a': 'deck'}, card(null, {cls: 'sm'})),
+    h('div', {class: 'bd'}, [0, 1, 2, 3, 4].map(i => v.board[i] ? card(v.board[i], {k: 'b' + i, src: 'deck', cls: 'md'}) : h('div', {class: 'c md empty'}))),
+    h('div', {class: 'pot'}, h('span', {class: 'coin'}), v.pot)));
+  for (const p of v.players) {
+    const tag = [p.id === v.button ? 'дилер' : '', p.allin ? 'all-in' : '', p.folded && p.in_hand ? 'фолд' : '', !p.in_hand && p.stack <= 0 ? 'вылетел' : ''].filter(Boolean).join(' · ');
+    box.append(h('div', {class: `seat ${v.turn === p.id ? 'turn' : ''} ${p.folded || !p.in_hand ? 'out' : ''}`},
+      avatar(p.id), h('div', {}, h('b', {}, nm(p.id) + (p.id === me ? ' · ты' : '')), h('div', {class: 'tag'}, tag || (v.turn === p.id ? 'думает…' : ''))),
+      h('div', {style: 'text-align:right'}, h('span', {class: 'betchip'}, h('span', {class: 'coin'}), p.stack), p.bet ? h('div', {class: 'dim'}, 'ставка ' + p.bet) : null),
+      p.in_hand && !p.folded ? h('div', {class: 'cards'}, fan(p.cards || [null, null], (c, i, st) => card(c, {k: `s${p.id}-${i}`, src: 'deck', cls: 'md', ...st}), 48, 110)) : null));
+  }
+  if (v.you) {
+    const y = v.you;
+    if (UI.raise == null || UI.raise < y.min_to || UI.raise > y.max_to) UI.raise = y.min_to;
+    const lbl = h('b', {}, UI.raise), sl = h('input', {type: 'range', min: y.min_to, max: y.max_to, value: UI.raise, step: 10, oninput: e => { UI.raise = +e.target.value; lbl.textContent = UI.raise; }});
+    box.append(h('div', {class: 'btns'}, btn('Сброс', () => act({a: 'fold'}), 'warn'), y.to_call > 0 ? btn(`Колл ${y.to_call}`, () => act({a: 'call'}), 'main') : btn('Чек', () => act({a: 'check'}), 'main')));
+    box.append(h('div', {class: 'panel stack'}, h('div', {class: 'row between'}, h('span', {class: 'dim'}, 'Рейз до'), lbl), sl,
+      h('div', {class: 'btns'}, btn(UI.raise >= y.max_to ? 'Олл-ин' : 'Рейз', () => act({a: 'raise', amount: UI.raise})))));
+  } else if (v.phase === 'result' && v.last) {
+    box.append(h('div', {class: 'panel stack'}, v.last.winners.map(w => h('div', {class: 'say'}, h('b', {}, nm(w.id)), ` забирает ${w.amount}`, w.hand ? ` · ${w.hand}` : ''))));
+    if (S.role === 'player' && !v.finished) box.append(h('div', {class: 'btns'}, btn('Следующая раздача', () => act({a: 'next'}), 'main')));
+  } else if (v.turn) box.append(h('div', {class: 'status dim'}, `Ходит ${nm(v.turn)}`));
+  return box;
+}
+
+// ───────── Тетрис ─────────
+const COL = {I:'#4fd0d0',O:'#eac545',T:'#b07ad8',S:'#5fc26a',Z:'#e5605a',J:'#5a85dc',L:'#eb9a48',G:'#6d7d76'};
+const SHAPES = {I:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],O:[[1,1],[1,1]],T:[[0,1,0],[1,1,1],[0,0,0]],S:[[0,1,1],[1,1,0],[0,0,0]],Z:[[1,1,0],[0,1,1],[0,0,0]],J:[[1,0,0],[1,1,1],[0,0,0]],L:[[0,0,1],[1,1,1],[0,0,0]]};
+const TT = {mounted: false, g: null, canv: {}, running: false};
+const rng = seed => { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+const rot = m => m[0].map((_, i) => m.map(r => r[i]).reverse());
+function newGame(seed) {
+  const r = rng(seed); let bag = [];
+  const pull = () => { if (!bag.length) { bag = Object.keys(SHAPES); for (let i = 6; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; } } return bag.pop(); };
+  const g = {board: Array.from({length: 20}, () => Array(10).fill('')), pull, nxt: pull(), score: 0, lines: 0, over: false, garb: 0, acc: 0, cur: null};
+  spawn(g); return g;
+}
+function spawn(g) { const k = g.nxt; g.nxt = g.pull(); const m = SHAPES[k].map(r => r.slice()); g.cur = {k, m, x: Math.floor((10 - m[0].length) / 2), y: 0}; if (hit(g, m, g.cur.x, 0)) g.over = true; }
+function hit(g, m, x, y) { for (let r = 0; r < m.length; r++) for (let c = 0; c < m[r].length; c++) if (m[r][c]) { const bx = x + c, by = y + r; if (bx < 0 || bx >= 10 || by >= 20 || (by >= 0 && g.board[by][bx])) return true; } return false; }
+function lockPiece(g) {
+  const {m, x, y, k} = g.cur;
+  m.forEach((row, r) => row.forEach((v, c) => { if (v && y + r >= 0) g.board[y + r][x + c] = k; }));
+  let n = 0;
+  for (let r = 19; r >= 0; r--) if (g.board[r].every(Boolean)) { g.board.splice(r, 1); n++; r++; }
+  while (g.board.length < 20) g.board.unshift(Array(10).fill(''));
+  if (n) { g.lines += n; g.score += [0, 100, 300, 500, 800][n] * (1 + Math.floor(g.lines / 10)); g.garb = Math.max(0, g.garb - ({1: 0, 2: 1, 3: 2, 4: 4}[n])); act({a: 'lines', n}); }
+  else if (g.garb) { for (let i = 0; i < g.garb; i++) { if (g.board[0].some(Boolean)) g.over = true; g.board.shift(); const row = Array(10).fill('G'); row[Math.floor(Math.random() * 10)] = ''; g.board.push(row); } g.garb = 0; }
+  if (!g.over) spawn(g);
+}
+const step = (g, dx, dy) => { const c = g.cur; if (!hit(g, c.m, c.x + dx, c.y + dy)) { c.x += dx; c.y += dy; return true; } return false; };
+const down = (g, soft) => { if (step(g, 0, 1)) { if (soft) g.score += 1; } else lockPiece(g); };
+const hard = g => { let d = 0; while (step(g, 0, 1)) d++; g.score += d * 2; lockPiece(g); };
+const spin = g => { const c = g.cur, m = rot(c.m); for (const k of [0, -1, 1, -2, 2]) if (!hit(g, m, c.x + k, c.y)) { c.m = m; c.x += k; return; } };
+function rows(g, ghost) {
+  const b = g.board.map(r => r.slice());
+  if (!g.over) {
+    const {m, x, k} = g.cur; let gy = g.cur.y; if (ghost) { while (!hit(g, m, x, gy + 1)) gy++; m.forEach((row, r) => row.forEach((v, c) => { if (v && gy + r >= 0 && !b[gy + r][x + c]) b[gy + r][x + c] = '*'; })); }
+    m.forEach((row, r) => row.forEach((v, c) => { if (v && g.cur.y + r >= 0) b[g.cur.y + r][x + c] = k; }));
+  }
+  return b.map(r => r.map(c => c || '.').join(''));
+}
+function drawBoard(cv, rs, cs, over) {
+  const x = cv.getContext('2d'); x.clearRect(0, 0, cv.width, cv.height);
+  if (cs >= 12) { x.strokeStyle = 'rgba(246,240,224,.05)'; for (let i = 1; i < 10; i++) { x.beginPath(); x.moveTo(i * cs, 0); x.lineTo(i * cs, cv.height); x.stroke(); } }
+  const b = Math.max(1, cs * .16);
+  rs.forEach((row, r) => [...row].forEach((ch, c) => {
+    if (ch === '.') return; const px = c * cs, py = r * cs;
+    if (ch === '*') { x.strokeStyle = 'rgba(246,240,224,.3)'; x.strokeRect(px + 1.5, py + 1.5, cs - 3, cs - 3); return; }
+    x.fillStyle = COL[ch] || '#888'; x.fillRect(px + 1, py + 1, cs - 1, cs - 1);
+    x.fillStyle = 'rgba(255,255,255,.3)'; x.fillRect(px + 1, py + 1, cs - 1, b); x.fillRect(px + 1, py + 1, b, cs - 1);
+    x.fillStyle = 'rgba(0,0,0,.28)'; x.fillRect(px + 1, py + cs - b, cs - 1, b);
+  }));
+  if (over) { x.fillStyle = 'rgba(0,0,0,.6)'; x.fillRect(0, 0, cv.width, cv.height); }
+}
+const mkCanvas = cs => { const c = h('canvas', {width: 10 * cs, height: 20 * cs}); c.dataset.cs = cs; return c; };
+function tetris(S, v, main) {
+  const me = S.me, playing = S.role === 'player';
+  if (!TT.mounted) {
+    TT.mounted = true; TT.canv = {}; TT.label = {};
+    const startLocal = Date.now() + (v.start_at - v.now), late = Date.now() > startLocal + 1500;
+    TT.g = (playing && v.alive.includes(me) && !late) ? newGame(v.seed) : null;
+    if (playing && v.alive.includes(me) && late) act({a: 'dead'});
+    TT.start = startLocal; TT.running = !!TT.g; TT.last = performance.now();
+    const oppBox = h('div', {class: playing ? 'opps2' : 'grid2'}, v.order.filter(p => !(playing && p === me)).map(p => {
+      TT.canv[p] = mkCanvas(playing ? 7 : 13); TT.label[p] = h('div', {class: 'dim'}, '');
+      return h('div', {class: 'opps2'}, TT.label[p], TT.canv[p]);
+    }));
+    TT.msg = h('div', {class: 'banner', style: 'display:none'});
+    if (TT.g) {
+      TT.me = mkCanvas(20); TT.info = h('div', {class: 'dim', style: 'text-align:center'}, '');
+      main.replaceChildren(h('div', {class: 'stack'}, TT.msg, h('div', {class: 'tt'}, TT.me, h('div', {class: 'opps2'}, TT.info, oppBox)), pad()));
+      bindKeys(); requestAnimationFrame(loop); clearInterval(TT.tick);
+      TT.tick = setInterval(() => { if (TT.g && TT.running) send({t: 'act', a: 'board', rows: rows(TT.g), score: TT.g.score}); }, 250);
+    } else main.replaceChildren(h('div', {class: 'stack'}, TT.msg, h('div', {class: 'dim say'}, playing ? 'Партию нельзя продолжить после перезахода' : 'Ты смотришь бой'), oppBox));
+  }
+  for (const p of v.order) if (TT.canv[p]) { drawBoard(TT.canv[p], v.boards[p], +TT.canv[p].dataset.cs, !v.alive.includes(p)); TT.label[p].textContent = `${nm(p)} · ${v.score[p]}${v.alive.includes(p) ? '' : ' ☠'}`; }
+  if (v.finished) { TT.running = false; TT.msg.style.display = ''; const rw = S.rewards && S.rewards[me]; TT.msg.textContent = '🏆 ' + S.result + (rw ? ` · ${rw.delta > 0 ? '+' : ''}${rw.delta} ⭐ → ${rw.points} ${rw.rank.emoji}` : ''); }
+}
+function loop(now) {
+  const g = TT.g; if (!g || !TT.mounted) return;
+  const cv = TT.me, x = cv.getContext('2d'), wait = TT.start - Date.now();
+  if (TT.running && wait <= 0 && !g.over) { g.acc += now - TT.last; const iv = Math.max(90, 800 - 55 * Math.floor(g.lines / 5)); while (g.acc >= iv && !g.over) { g.acc -= iv; down(g, false); } }
+  TT.last = now;
+  if (g.over && TT.running) { TT.running = false; send({t: 'act', a: 'board', rows: rows(g), score: g.score}); act({a: 'dead'}); }
+  drawBoard(cv, rows(g, true), 20, g.over);
+  if (wait > 0) { x.fillStyle = 'rgba(0,0,0,.65)'; x.fillRect(0, 0, 200, 400); x.fillStyle = '#e2bb68'; x.font = '700 72px Palatino,Georgia'; x.textAlign = 'center'; x.fillText(Math.ceil(wait / 1000), 100, 225); }
+  TT.info.textContent = `Счёт ${g.score} · линии ${g.lines}` + (g.garb ? ` · ⚠ +${g.garb}` : '');
+  requestAnimationFrame(loop);
+}
+const can = () => TT.g && TT.running && !TT.g.over && TT.start <= Date.now();
+const K = {left: () => can() && step(TT.g, -1, 0), right: () => can() && step(TT.g, 1, 0), down: () => can() && down(TT.g, true), spin: () => can() && spin(TT.g), drop: () => can() && hard(TT.g)};
+function bindKeys() { if (TT.keys) return; TT.keys = true; addEventListener('keydown', e => { const m = {ArrowLeft: 'left', ArrowRight: 'right', ArrowDown: 'down', ArrowUp: 'spin', KeyZ: 'spin', Space: 'drop'}[e.code]; if (m) { e.preventDefault(); K[m](); } }); }
+function pad() {
+  const mk = (label, key, rep) => { const b = h('button', {}, label); let t; const stop = () => clearInterval(t);
+    b.addEventListener('pointerdown', e => { e.preventDefault(); K[key](); if (rep) { stop(); t = setInterval(K[key], 110); } });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop)); return b; };
+  return h('div', {class: 'pad'}, mk('◀', 'left', 1), mk('⟳', 'spin'), mk('▶', 'right', 1), mk('▼', 'down', 1), mk('⤓', 'drop'));
+}
+
+// ═════════ DEMO: локальная симуляция (без Telegram и сервера) ═════════
+const NAMES = {1: 'Анна', 2: 'Борис', 3: 'Вика', 99: 'Зритель'};
+const shuf = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const FULL = () => shuf(['2','3','4','5','6','7','8','9','10','J','Q','K','A'].flatMap(r => [...'SHDC'].map(s => r + s)));
+let ME = 1, DG = 'durak', DR = 'player';
+const DM = {}, BJ = {}, PK = {};
+const sortLow = (a, b) => rv(a) - rv(b) + ((su(a) === su(DM.trump)) - (su(b) === su(DM.trump))) * 20;
+const dkBeats = (d, a) => su(d) === su(a) ? rv(d) > rv(a) : su(d) === su(DM.trump);
+function dkInit() {
+  const d = shuf(RK.flatMap(r => [...'SHDC'].map(s => r + s)));
+  Object.assign(DM, {deck: d, trump: d[0], h: {1: [], 2: [], 3: []}, table: [], discard: 0, active: [1, 2, 3], att: 1, def: 2, phase: 'attack', done: false, loser: null});
+  for (const p of [1, 2, 3]) for (let i = 0; i < 6; i++) DM.h[p].push(d.pop());
+}
+function dkSync() {
+  const D = DM, c = p => D.h[p].length;
+  if (D.done && !D.rew) { D.rew = demoReward(D.loser === ME ? 'l' : D.loser ? 'w' : 'd'); renderMeta(); }
+  S = {...S, rewards: D.done ? D.rew : {}, status: D.done ? 'finished' : 'playing', result: D.done ? (D.loser ? 'Дурак: ' + nm(D.loser) : 'Ничья') : '',
+    view: {game: 'durak', trump: D.trump, deck: D.deck.length, discard: D.discard, table: D.table.map(p => [...p]), phase: D.phase, attacker: D.att, defender: D.def,
+      active: [...D.active], order: [1, 2, 3], counts: {1: c(1), 2: c(2), 3: c(3)}, hand: DR === 'player' ? [...D.h[1]] : null, finished: D.done, loser: D.loser}};
+  render();
+}
+function dkEnd(took) {
+  const D = DM, old = [...D.active], d = D.def, cards = D.table.flat().filter(Boolean), nx = p => old[(old.indexOf(p) + 1) % old.length];
+  if (took) D.h[d].push(...cards); else D.discard += cards.length;
+  const seq = []; let p = D.att; for (let i = 0; i < old.length; i++) { if (p !== d) seq.push(p); p = nx(p); } seq.push(d);
+  for (const q of seq) while (D.h[q].length < 6 && D.deck.length) D.h[q].push(D.deck.pop());
+  const na = old.filter(q => D.h[q].length || D.deck.length);
+  let cand = took ? nx(d) : d; for (let i = 0; i < old.length && !na.includes(cand); i++) cand = nx(cand);
+  D.table = []; D.phase = 'attack';
+  if (na.length <= 1) { D.active = na; D.done = true; D.loser = na[0] || null; return; }
+  D.active = na; D.att = cand; D.def = na[(na.indexOf(cand) + 1) % na.length];
+}
+const dkSchedule = () => { clearTimeout(DM.t); if (!DM.done) DM.t = setTimeout(dkBot, 1100); };
+function dkBot() {
+  const D = DM, open = D.table.findIndex(p => !p[1]); let acted = false;
+  const canAdd = () => D.table.length < 6 && D.table.filter(p => !p[1]).length < D.h[D.def].length;
+  if (D.phase === 'attack') {
+    if (D.def !== ME && open >= 0) {
+      const hd = D.h[D.def], c = hd.filter(c => dkBeats(c, D.table[open][0])).sort(sortLow)[0];
+      if (c && Math.random() > .1) { hd.splice(hd.indexOf(c), 1); D.table[open][1] = c; } else D.phase = 'taking';
+      acted = true;
+    } else if (D.att !== ME && open < 0) {
+      const hd = D.h[D.att], rs = new Set(D.table.flat().filter(Boolean).map(rk));
+      const c = (D.table.length ? hd.filter(c => rs.has(rk(c))) : hd).sort(sortLow)[0];
+      if (c && canAdd() && (!D.table.length || su(c) !== su(D.trump) || Math.random() > .5)) { hd.splice(hd.indexOf(c), 1); D.table.push([c, null]); }
+      else if (D.table.length) dkEnd(false);
+      acted = true;
+    }
+  } else if (D.att !== ME) {
+    const hd = D.h[D.att], rs = new Set(D.table.flat().filter(Boolean).map(rk)), c = hd.filter(c => rs.has(rk(c)) && su(c) !== su(D.trump)).sort(sortLow)[0];
+    if (c && D.table.length < 6) { hd.splice(hd.indexOf(c), 1); D.table.push([c, null]); } else dkEnd(true);
+    acted = true;
+  }
+  dkSync(); if (acted) dkSchedule();
+}
+function dkAct(o) {
+  const D = DM;
+  if (D.done) return;
+  if (o.a === 'play') {
+    const c = o.card; if (!D.h[ME].includes(c)) return;
+    if (ME === D.def) {
+      if (D.phase !== 'attack') return toast('Ты уже берёшь');
+      const i = D.table.findIndex(p => !p[1] && dkBeats(c, p[0])); if (i < 0) return toast('Этой картой нечего бить');
+      D.h[ME].splice(D.h[ME].indexOf(c), 1); D.table[i][1] = c;
+    } else {
+      if (!D.table.length && ME !== D.att) return toast('Первый ход делает атакующий');
+      if (D.table.length && !D.table.flat().some(x => x && rk(x) === rk(c))) return toast('Подкинуть можно только по достоинству карт на столе');
+      if (D.table.length >= 6) return toast('Лимит карт на столе');
+      D.h[ME].splice(D.h[ME].indexOf(c), 1); D.table.push([c, null]);
+    }
+  } else if (o.a === 'take') { if (ME !== D.def || D.phase !== 'attack' || !D.table.length) return; D.phase = 'taking'; }
+  else if (o.a === 'done') {
+    if (ME !== D.att) return;
+    if (D.phase === 'taking') dkEnd(true); else if (D.table.length && D.table.every(p => p[1])) dkEnd(false); else return toast('Не все карты отбиты');
+  }
+  dkSync(); dkSchedule();
+}
+// блэкджек
+const bjv = hd => { let t = 0, a = 0; for (const c of hd) { const r = rk(c); t += r === 'A' ? (a++, 11) : 'JQK'.includes(r) ? 10 : +r; } while (t > 21 && a-- > 0) t -= 10; return t; };
+function bjInit(chips) {
+  const dk = FULL(), d = () => dk.pop();
+  Object.assign(BJ, {dk, round: (BJ.round || 0) + 1, chips: chips || {1: 1000, 2: 1000}, hands: {1: [d(), d()], 2: [d(), d()]}, dealer: [d(), d()], phase: 'play', done: {}, delta: {}, turn: null});
+  for (const p of [1, 2]) BJ.done[p] = bjv(BJ.hands[p]) === 21;
+  bjAdvance();
+}
+function bjAdvance() {
+  BJ.turn = !BJ.done[1] ? 1 : !BJ.done[2] ? 2 : null;
+  if (BJ.turn === null) {
+    while (bjv(BJ.dealer) < 17) BJ.dealer.push(BJ.dk.pop());
+    const dv = bjv(BJ.dealer);
+    for (const p of [1, 2]) { const v = bjv(BJ.hands[p]); BJ.delta[p] = v > 21 ? -100 : (dv > 21 || v > dv) ? 100 : v === dv ? 0 : -100; BJ.chips[p] += BJ.delta[p]; }
+    BJ.phase = 'result'; if (DR !== 'player') setTimeout(() => bjInit(BJ.chips), 3500);
+  }
+  bjSync();
+  if (BJ.turn && (DR !== 'player' || BJ.turn === 2)) setTimeout(bjBot, 1000);
+}
+function bjBot() { const p = BJ.turn; if (!p) return; if (bjv(BJ.hands[p]) < 17) BJ.hands[p].push(BJ.dk.pop()); if (bjv(BJ.hands[p]) >= 17) BJ.done[p] = true; bjAdvance(); }
+function bjSync() {
+  const reveal = BJ.phase === 'result', P = DR === 'player', hands = {};
+  for (const p of [1, 2]) { const show = (P && p === 1) || (P && BJ.done[p]) || reveal; hands[p] = {cards: show ? [...BJ.hands[p]] : null, n: BJ.hands[p].length, total: show ? bjv(BJ.hands[p]) : null, bet: 100, done: !!BJ.done[p], delta: reveal ? BJ.delta[p] : null}; }
+  S = {...S, status: 'playing', view: {game: 'blackjack', round: BJ.round, rounds: 5, phase: BJ.phase, turn: BJ.turn, chips: {...BJ.chips}, hands, seated: [1, 2], dealer: reveal ? [...BJ.dealer] : [BJ.dealer[0]], dealer_hidden: reveal ? 0 : 1, dealer_total: reveal ? bjv(BJ.dealer) : null, finished: false}};
+  render();
+}
+function bjAct(o) {
+  if (o.a === 'next' && BJ.phase === 'result') return bjInit(BJ.chips);
+  if (BJ.phase !== 'play' || BJ.turn !== 1) return;
+  if (o.a === 'hit' || o.a === 'double') { BJ.hands[1].push(BJ.dk.pop()); if (o.a === 'double' || bjv(BJ.hands[1]) >= 21) BJ.done[1] = true; }
+  else if (o.a === 'stand') BJ.done[1] = true;
+  bjAdvance();
+}
+// покер
+const PH = ['Старшая карта', 'Пара', 'Две пары', 'Сет', 'Стрит', 'Флеш', 'Фулл-хаус'];
+function pkInit() { const d = FULL(); Object.assign(PK, {full: d.splice(0, 5), mine: d.splice(0, 2), opp: d.splice(0, 2), vic: d.splice(0, 2), n: 3, pot: 240, phase: 'play', hn: (PK.hn || 0) + 1, last: null}); pkSync(); if (DR !== 'player') PK.t = setTimeout(pkAuto, 2200); }
+function pkAuto() { if (PK.phase === 'play') pkAdvance(); else pkInit(); if (DR !== 'player' || PK.phase === 'play') clearTimeout(PK.t), PK.t = DR !== 'player' ? setTimeout(pkAuto, 2200) : 0; }
+function pkAdvance(extra = 0) {
+  PK.pot += 80 + extra;
+  if (PK.n >= 5) { const w = Math.random() < .5 ? 1 : 2; PK.phase = 'result'; PK.last = {winners: [{id: w, amount: PK.pot, hand: PH[1 + Math.floor(Math.random() * 6)]}], shown: {1: PK.mine, 2: PK.opp, 3: null}, board: PK.full}; }
+  else PK.n++;
+  pkSync();
+}
+function pkSync() {
+  const P = DR === 'player', res = PK.phase === 'result', sh = (p, c) => (p === 1 && P) || res ? c : null;
+  S = {...S, status: 'playing', view: {game: 'poker', phase: PK.phase, street: ['', '', '', 'flop', 'turn', 'river'][PK.n], board: PK.full.slice(0, PK.n), pot: PK.pot, button: 3, turn: PK.phase === 'play' ? (P ? 1 : 2) : null, hand_no: PK.hn, blinds: [10, 20], last: PK.last, finished: false,
+    you: P && PK.phase === 'play' ? {to_call: 0, min_to: 40, max_to: 860} : null,
+    players: [{id: 1, stack: 860, bet: 0, folded: false, in_hand: true, allin: false, cards: sh(1, PK.mine)}, {id: 2, stack: 720, bet: 0, folded: false, in_hand: true, allin: false, cards: sh(2, PK.opp)}, {id: 3, stack: 1180, bet: 0, folded: true, in_hand: true, allin: false, cards: null}]}};
+  render();
+}
+function pkAct(o) {
+  if (o.a === 'next') return pkInit();
+  if (PK.phase !== 'play') return;
+  if (o.a === 'fold') { PK.phase = 'result'; PK.last = {winners: [{id: 2, amount: PK.pot, hand: null}], shown: {}, board: PK.full}; return pkSync(); }
+  pkAdvance(o.a === 'raise' ? +o.amount : 0);
+}
+const DRANKS = [[0, 'Новичок', '🥚'], [100, 'Любитель', '🌱'], [250, 'Игрок', '🎲'], [500, 'Знаток', '🥉'], [900, 'Мастер', '🥈'], [1400, 'Эксперт', '🥇'], [2100, 'Грандмастер', '💎'], [3000, 'Легенда', '👑']];
+const DP = {uid: 1, name: 'Анна', points: 130, played: 12, wins: 7, losses: 4, draws: 1, streak: 2, best_streak: 4,
+  games: {durak: {played: 5, wins: 3, losses: 2, draws: 0}, blackjack: {played: 4, wins: 2, losses: 1, draws: 1}, poker: {played: 2, wins: 1, losses: 1, draws: 0}, tetris: {played: 1, wins: 1, losses: 0, draws: 0}},
+  recent: ['w', 'w', 'l', 'w', 'd', 'w', 'l', 'w', 'w', 'l'], badges: [{e: '🎯', t: 'Первая победа'}, {e: '🔟', t: '10 партий'}, {e: '🎰', t: 'Универсал: сыграл во все игры'}, {e: '🔥', t: 'Серия из 3 побед'}]};
+function demoRank(pts) {
+  const i = DRANKS.reduce((a, r, k) => pts >= r[0] ? k : a, 0), c = DRANKS[i], n = DRANKS[i + 1];
+  return {idx: i, name: c[1], emoji: c[2], min: c[0], next_min: n ? n[0] : null, next_name: n && n[1], next_emoji: n && n[2], left: n ? n[0] - pts : 0, progress: n ? (pts - c[0]) / (n[0] - c[0]) : 1};
+}
+function demoProfileMsg() {
+  const rk = demoRank(DP.points), me = {uid: 1, name: 'Анна', points: DP.points, rank_emoji: rk.emoji};
+  const top = [{uid: 2, name: 'Борис', points: 410, rank_emoji: '🎲'}, {uid: 3, name: 'Вика', points: 260, rank_emoji: '🎲'}, me, {uid: 4, name: 'Глеб', points: 60, rank_emoji: '🥚'}].sort((a, b) => b.points - a.points);
+  return {t: 'profile', p: {...DP, rank: rk, winrate: Math.round(100 * DP.wins / DP.played), place: top.findIndex(x => x.uid === 1) + 1, total: top.length}, top, scope: 'chat',
+    ranks: DRANKS.map(r => ({min: r[0], name: r[1], emoji: r[2]})), games: Object.fromEntries(Object.entries(TITLES).map(([k, t]) => [k, {title: t, emoji: {durak: '🃏', blackjack: '♠️', poker: '♦️', tetris: '🧱'}[k]}])),
+    rules: ['🏆 Победа: от +20 (чем больше соперников, тем больше очков)', '💀 Поражение: −10 (ниже нуля очки не падают)', '🤝 Ничья: +5', '🔥 Серия побед: с 3-й подряд +5, с 5-й подряд +10 за каждую']};
+}
+function demoReward(res) {
+  if (DR !== 'player') return {};
+  const d = {w: 20, l: -10, d: 5}[res], old = DP.points, before = demoRank(old).idx, np = Math.max(0, old + d), g = DP.games[DG];
+  Object.assign(DP, {points: np, played: DP.played + 1, streak: res === 'w' ? DP.streak + 1 : res === 'l' ? 0 : DP.streak});
+  DP[{w: 'wins', l: 'losses', d: 'draws'}[res]]++; g.played++; g[{w: 'wins', l: 'losses', d: 'draws'}[res]]++; DP.recent = [res, ...DP.recent].slice(0, 10);
+  const rk = demoRank(np); PD = demoProfileMsg();
+  return {[ME]: {result: res, delta: np - old, points: np, rank: {name: rk.name, emoji: rk.emoji}, up: rk.idx > before}};
+}
+function demoAct(o) {
+  if (DG === 'durak') dkAct(o); else if (DG === 'blackjack') bjAct(o); else if (DG === 'poker') pkAct(o);
+}
+function demoStart() {
+  [DG, DR] = (location.hash.slice(1) || 'durak-player').split('-'); DR = DR === 'spectator' ? 'spectator' : 'player'; ME = DR === 'player' ? 1 : 99;
+  $('#demo').style.display = 'flex'; $('#note').style.display = 'block';
+  const go = (g, r) => { location.hash = g + '-' + r; location.reload(); };
+  const bar = $('#demo');
+  Object.entries(TITLES).forEach(([g, t]) => bar.append(h('button', {class: g === DG ? 'on' : '', onclick: () => go(g, DR)}, t)));
+  bar.append(h('span', {style: 'width:100%'}));
+  [['player', 'Я игрок'], ['spectator', 'Я зритель']].forEach(([r, t]) => bar.append(h('button', {class: r === DR ? 'on' : '', onclick: () => go(DG, r)}, t)));
+  const P = DR === 'player'; PD = demoProfileMsg();
+  S = {t: 'state', game: DG, lobby: 'demo', me: ME, status: 'playing', players: DG === 'durak' ? [1, 2, 3] : [1, 2], role: P ? 'player' : 'spectator', names: NAMES, viewers: P ? 2 : 3, result: ''};
+  if (DG === 'durak') { dkInit(); dkSync(); dkSchedule(); }
+  else if (DG === 'blackjack') bjInit();
+  else if (DG === 'poker') { pkInit(); }
+  else {
+    const board = hh => Array.from({length: 20}, (_, r) => r < 20 - hh ? '..........' : [...'..........'].map(() => Math.random() < .78 ? 'IOTSZJL'[Math.floor(Math.random() * 7)] : '.').join(''));
+    S.view = {game: 'tetris', seed: 777, start_at: Date.now() + 3500, now: Date.now(), order: [1, 2], alive: [1, 2], finished: false, score: {1: 0, 2: 1200}, boards: {1: board(0), 2: board(6)}};
+    render(); setInterval(() => { S.view.boards[2] = board(4 + Math.floor(Math.random() * 6)); if (!P) S.view.boards[1] = board(3 + Math.floor(Math.random() * 7)); S.view.score[2] += 40; tetris(S, S.view, $('#main')); }, 1500);
+  }
+}
+
+if (DEMO) demoStart(); else connect();
+</script>
+</body>
+</html>
