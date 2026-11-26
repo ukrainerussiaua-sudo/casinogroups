@@ -1,5 +1,5 @@
 """Тетрис-батл 2-4 игрока. Физика считается на клиентах (общий seed), сервер:
-синхронизирует старт, пересылает доски зрителям/соперникам, раздаёт мусорные линии, определяет победителя."""
+синхронизирует старт (отсчёт идёт, когда ВСЕ игроки открыли бой), пересылает доски зрителям/соперникам, раздаёт мусорные линии, определяет победителя."""
 import random
 import time
 from .common import BaseGame, GameError
@@ -12,16 +12,23 @@ class Tetris(BaseGame):
     def __init__(self, players):
         super().__init__(players)
         self.seed = random.randrange(1, 2 ** 31)
-        self.start_at = int(time.time() * 1000) + 6000
+        self.start_at = None  # ставится в try_start(), когда все игроки подключились к Mini App
         self.boards = {p: [EMPTY_ROW] * 20 for p in players}
         self.score = {p: 0 for p in players}
         self.alive = list(players)
         self.dead_order = []
 
+    def try_start(self, connected):
+        """Запустить общий отсчёт (4 с), когда все игроки открыли бой. True — старт только что назначен."""
+        if self.start_at is None and all(p in connected for p in self.players):
+            self.start_at = int(time.time() * 1000) + 4000
+            return True
+        return False
+
     def act(self, uid, a):
         if uid not in self.players:
             raise GameError("Ты зритель")
-        if self.finished or uid not in self.alive:
+        if self.finished or uid not in self.alive or self.start_at is None:
             return
         k = a.get("a")
         if k == "board":

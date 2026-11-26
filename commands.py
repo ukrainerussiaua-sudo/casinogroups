@@ -1,6 +1,7 @@
 """Разбор текстовых команд из чата: игры, профиль, топ, помощь — со всеми синонимами.
 parse(text, bot_username) -> (kind, arg) | None
   kind: "game"(arg=ключ игры) | "profile"(arg={"username":..|None,"other":bool}) | "top"(arg=ключ игры|None) | "ranks" | "help"
+        | "stop"(arg=True если это /команда, False если обычная фраза «стоп игра» / «отмена дурак»)
 """
 import re
 
@@ -17,11 +18,18 @@ _FILL = "игра|играть|сыграть|сыграем|поиграем|н
 GAME_RE = re.compile(rf"^(?:{_PRE})(?: (?:{_FILL}))*(?: в)? (?P<g>{_alts})$")
 TOP_GAME_RE = re.compile(rf"^(?:топ|рейтинг|лидеры|лучшие|топ игроков|лучшие игроки)(?: по| в)? (?P<g>{_alts})$")
 
+# «стоп игра», «отмена игры», «отменить дурак», «остановить игру» … (голые «отмена»/«стоп» не считаем — слишком частые слова)
+_STOP_VERB = "отмена|отмени|отменить|отменяем|стоп|остановить|останови|останавливаем|завершить|завершай|закончить|заканчиваем|прекратить|прекращай|выключить"
+_STOP_NOUN = "игра|игру|игры|партия|партию|партии|катка|катку|раздача|раздачу"
+STOP_RE = re.compile(rf"^(?:{_STOP_VERB})(?: (?:{_STOP_NOUN}))?(?: (?P<g>{_alts}))?$")
+STOP_WORDS = {"стопгейм", "стопигра", "stopgame", "stop game", "cancel game", "end game"}
+
 SLASH_GAME = {"durak": "durak", "blackjack": "blackjack", "bj": "blackjack", "poker": "poker", "tetris": "tetris"}
 SLASH = {
     "profile": "profile", "me": "profile", "stats": "profile", "whoami": "profile", "rank": "profile", "points": "profile",
     "top": "top", "leaderboard": "top", "ranks": "ranks", "levels": "ranks",
     "help": "help", "start": "help", "games": "help", "commands": "help",
+    "stopgame": "stop", "stop_game": "stop", "stop": "stop", "cancel": "stop", "endgame": "stop", "end_game": "stop", "cancelgame": "stop",
 }
 
 # «о себе» (или о том, на чьё сообщение ответили)
@@ -66,6 +74,10 @@ def parse(text: str, bot_username: str = ""):
     if not t or len(t) > 80:
         return None
     bot = bot_username.lower()
+    if t.startswith("/"):  # «/top@чужой_бот» — команда не нам, в группах с несколькими ботами её нельзя перехватывать
+        addr = re.match(r"/\w+@(\w+)", t)
+        if addr and bot and addr.group(1) != bot:
+            return None
     target = next((m for m in re.findall(r"@(\w+)", t) if m != bot), None)
     mentioned_bot = bool(bot) and f"@{bot}" in t
     slash = t.startswith("/")
@@ -78,12 +90,17 @@ def parse(text: str, bot_username: str = ""):
         if w in SLASH_GAME:
             return "game", SLASH_GAME[w]
         k = SLASH.get(w)
+        if k == "stop":
+            return "stop", True
         if k == "profile":
             return "profile", {"username": target, "other": False}
         if k == "top":
             g = ALIAS.get(" ".join(key.split()[1:]))
             return "top", g
         return (k, None) if k else None
+    m = STOP_RE.match(key)
+    if (m and len(key.split()) >= 2) or key in STOP_WORDS:
+        return "stop", False
     m = GAME_RE.match(key)
     if m:
         return "game", ALIAS[m["g"]]

@@ -119,7 +119,8 @@ b.up{color:#7be0a0}b.dn{color:#ff8d84}
 const tg = window.Telegram?.WebApp;
 try { tg.ready(); tg.expand(); tg.setHeaderColor('#0b1f18'); tg.setBackgroundColor('#0b1f18'); tg.disableVerticalSwipes?.(); } catch (e) {}
 const qs = new URLSearchParams(location.search);
-const LOBBY = tg?.initDataUnsafe?.start_param || qs.get('lobby');
+const START = tg?.initDataUnsafe?.start_param || qs.get('lobby') || '';
+const LOBBY = ['me', 'profile'].includes(START) ? '' : START;  // startapp=me — кнопка «Открыть профиль», это не игра
 const DEV = qs.get('dev') === '1';
 const DEMO = !tg?.initData && !DEV;
 const PONLY = !LOBBY && !DEMO;  // открыто без игры (кнопка «Открыть профиль» из чата)
@@ -272,7 +273,7 @@ function render() {
   const before = snap();
   const out = h('div', {class: 'stack'});
   if (S.role === 'spectator') out.append(h('div', {class: 'dim say'}, 'Ты смотришь бой. Карты в руках скрыты.'));
-  if (S.status === 'finished') out.append(h('div', {class: 'banner'}, '🏆 ' + S.result));
+  if (S.status === 'finished') out.append(h('div', {class: 'banner'}, (S.cancelled ? '🛑 ' : '🏆 ') + S.result));
   if (S.status === 'finished' && S.rewards && Object.keys(S.rewards).length) out.append(rewardsPanel(S.rewards));
   out.append({durak, blackjack, poker}[S.game](S, v));
   main.replaceChildren(out);
@@ -433,7 +434,7 @@ function tetris(S, v, main) {
   const me = S.me, playing = S.role === 'player';
   if (!TT.mounted) {
     TT.mounted = true; TT.canv = {}; TT.label = {};
-    const startLocal = Date.now() + (v.start_at - v.now), late = Date.now() > startLocal + 1500;
+    const waiting = v.start_at == null, startLocal = waiting ? Infinity : Date.now() + (v.start_at - v.now), late = !waiting && Date.now() > startLocal + 1500;
     TT.g = (playing && v.alive.includes(me) && !late) ? newGame(v.seed) : null;
     if (playing && v.alive.includes(me) && late) act({a: 'dead'});
     TT.start = startLocal; TT.running = !!TT.g; TT.last = performance.now();
@@ -449,8 +450,9 @@ function tetris(S, v, main) {
       TT.tick = setInterval(() => { if (TT.g && TT.running) send({t: 'act', a: 'board', rows: rows(TT.g), score: TT.g.score}); }, 250);
     } else main.replaceChildren(h('div', {class: 'stack'}, TT.msg, h('div', {class: 'dim say'}, playing ? 'Партию нельзя продолжить после перезахода' : 'Ты смотришь бой'), oppBox));
   }
+  if (v.start_at != null && !isFinite(TT.start)) TT.start = Date.now() + (v.start_at - v.now);  // все подключились — пошёл отсчёт
   for (const p of v.order) if (TT.canv[p]) { drawBoard(TT.canv[p], v.boards[p], +TT.canv[p].dataset.cs, !v.alive.includes(p)); TT.label[p].textContent = `${nm(p)} · ${v.score[p]}${v.alive.includes(p) ? '' : ' ☠'}`; }
-  if (v.finished) { TT.running = false; TT.msg.style.display = ''; const rw = S.rewards && S.rewards[me]; TT.msg.textContent = '🏆 ' + S.result + (rw ? ` · ${rw.delta > 0 ? '+' : ''}${rw.delta} ⭐ → ${rw.points} ${rw.rank.emoji}` : ''); }
+  if (v.finished) { TT.running = false; TT.msg.style.display = ''; const rw = S.rewards && S.rewards[me]; TT.msg.textContent = (S.cancelled ? '🛑 ' : '🏆 ') + S.result + (rw ? ` · ${rw.delta > 0 ? '+' : ''}${rw.delta} ⭐ → ${rw.points} ${rw.rank.emoji}` : ''); }
 }
 function loop(now) {
   const g = TT.g; if (!g || !TT.mounted) return;
@@ -459,7 +461,11 @@ function loop(now) {
   TT.last = now;
   if (g.over && TT.running) { TT.running = false; send({t: 'act', a: 'board', rows: rows(g), score: g.score}); act({a: 'dead'}); }
   drawBoard(cv, rows(g, true), 20, g.over);
-  if (wait > 0) { x.fillStyle = 'rgba(0,0,0,.65)'; x.fillRect(0, 0, 200, 400); x.fillStyle = '#e2bb68'; x.font = '700 72px Palatino,Georgia'; x.textAlign = 'center'; x.fillText(Math.ceil(wait / 1000), 100, 225); }
+  if (wait > 0) {
+    x.fillStyle = 'rgba(0,0,0,.65)'; x.fillRect(0, 0, 200, 400); x.fillStyle = '#e2bb68'; x.textAlign = 'center';
+    if (isFinite(wait)) { x.font = '700 72px Palatino,Georgia'; x.fillText(Math.ceil(wait / 1000), 100, 225); }
+    else { x.font = '700 22px Palatino,Georgia'; x.fillText('Ждём остальных…', 100, 205); x.font = '14px sans-serif'; x.fillText('старт, когда все откроют бой', 100, 232); }
+  }
   TT.info.textContent = `Счёт ${g.score} · линии ${g.lines}` + (g.garb ? ` · ⚠ +${g.garb}` : '');
   requestAnimationFrame(loop);
 }
@@ -652,7 +658,8 @@ function demoStart() {
   }
 }
 
-if (DEMO) demoStart(); else connect();
+if (DEMO) demoStart();
+else { if (PONLY) { $('#title').textContent = 'Профиль'; $('#glyph').textContent = '👤'; } connect(); }
 </script>
 </body>
 </html>
