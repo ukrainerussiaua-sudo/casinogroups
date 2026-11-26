@@ -13,7 +13,7 @@
    (альтернатива: `/newapp`, и тогда задай `APP_SHORT_NAME` в окружении).
 5. ```
    pip install -r requirements.txt
-   BOT_TOKEN=... python bot.py
+   BOT_TOKEN=... python main.py
    ```
 6. Добавь бота в группу.
 
