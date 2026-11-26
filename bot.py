@@ -142,7 +142,7 @@ async def create_lobby(m: Message, game: str):
     if m.chat.id in CHAT_LOBBY:
         old = LOBBIES.get(CHAT_LOBBY[m.chat.id])
         if old and old.status in ("open", "playing"):
-            await m.reply("В этом чате уже идёт игра. Дождитесь конца или остановите её: "
+            await safe_reply(m, "В этом чате уже идёт игра. Дождитесь конца или остановите её: "
                           "кнопка ниже или команда /stopgame (у остальных будет 60 секунд, чтобы отменить отмену).",
                           reply_markup=InlineKeyboardMarkup(inline_keyboard=[[stop_btn(old)]]))
             return
@@ -152,7 +152,7 @@ async def create_lobby(m: Message, game: str):
     LOBBIES[l.id] = l
     CHAT_LOBBY[m.chat.id] = l.id
     try:
-        sent = await m.reply(lobby_text(l), reply_markup=lobby_kb(l))
+        sent = await safe_reply(m, lobby_text(l), reply_markup=lobby_kb(l))
     except Exception:  # не удалось отправить — не оставляем «призрачное» лобби, которое блокирует чат
         LOBBIES.pop(l.id, None)
         release_chat(l)
@@ -166,17 +166,17 @@ async def show_profile(m: Message, arg: dict):
     if arg.get("username"):
         uid = db.find_by_username(arg["username"])
         if uid is None:
-            return await m.reply(f"Не знаю игрока @{html.escape(arg['username'])} — он ещё не писал боту и не играл.")
+            return await safe_reply(m, f"Не знаю игрока @{html.escape(arg['username'])} — он ещё не писал боту и не играл.")
         p = db.get_profile(uid)
-        return await m.reply(texts.profile_text(p))
+        return await safe_reply(m, texts.profile_text(p))
     rep = m.reply_to_message.from_user if m.reply_to_message else None
     if rep and not rep.is_bot and rep.id != me.id:
         target, own = rep, False
         db.touch(rep.id, rep.full_name, rep.username)
     elif arg.get("other"):
-        return await m.reply("Ответь этой командой на сообщение игрока или напиши «профиль @ник».")
+        return await safe_reply(m, "Ответь этой командой на сообщение игрока или напиши «профиль @ник».")
     p = db.get_profile(target.id, target.full_name)
-    await m.reply(texts.profile_text(p), reply_markup=mini_app_kb() if own and BOT_USERNAME else None)
+    await safe_reply(m, texts.profile_text(p), reply_markup=mini_app_kb() if own and BOT_USERNAME else None)
 
 
 @dp.message(F.chat.type.in_({"group", "supergroup", "private"}), F.text)
@@ -192,24 +192,24 @@ async def on_text(m: Message):
     group = m.chat.type != "private"
     if kind == "game":
         if not group:
-            return await m.reply("Игры запускаются в группе: добавь меня в чат и напиши там «игра дурак».")
+            return await safe_reply(m, "Игры запускаются в группе: добавь меня в чат и напиши там «игра дурак».")
         await create_lobby(m, arg)
     elif kind == "stop":
         if not group:
-            return await m.reply("Остановить игру можно только в группе, где она идёт.") if arg else None
+            return await safe_reply(m, "Остановить игру можно только в группе, где она идёт.") if arg else None
         l = active_lobby(m.chat.id)
         if not l:
-            return await m.reply("В этом чате сейчас нет активной игры.") if arg else None  # на обычную фразу молчим
+            return await safe_reply(m, "В этом чате сейчас нет активной игры.") if arg else None  # на обычную фразу молчим
         await request_stop(l, u, reply_to=m.message_id)
     elif kind == "profile":
         await show_profile(m, arg)
     elif kind == "top":
         rows = db.top(m.chat.id if group else None, 10, arg)
-        await m.reply(texts.top_text(rows, "этот чат" if group else "все игроки", arg))
+        await safe_reply(m, texts.top_text(rows, "этот чат" if group else "все игроки", arg))
     elif kind == "ranks":
-        await m.reply(texts.ranks_text())
+        await safe_reply(m, texts.ranks_text())
     elif kind == "help":
-        await m.reply(texts.help_text())
+        await safe_reply(m, texts.help_text())
 
 
 async def _lobby_cb(cb: CallbackQuery):
@@ -305,6 +305,16 @@ def stop_text(l: Lobby, left: int) -> str:
 
 def stop_kb(l: Lobby) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="↩️ Отменить отмену", callback_data=f"x:{l.id}")]])
+
+
+async def safe_reply(m: Message, text: str, **kw):
+    """m.reply, который не падает, если исходное сообщение уже удалено: тогда просто пишет в чат."""
+    try:
+        return await m.reply(text, **kw)
+    except TelegramBadRequest as e:
+        if "replied not found" not in str(e) and "reply message not found" not in str(e).lower():
+            raise
+        return await m.answer(text, **kw)
 
 
 async def safe_send(chat_id: int, text: str, reply_to: int | None = None, **kw):
